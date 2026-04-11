@@ -84,6 +84,7 @@ function App() {
       const sourceUsed =
         nextResult?.meta?.listing_source_used ?? nextResult?.meta?.listing_source ?? 'mock'
       const sourceWarning = String(nextResult?.meta?.listing_warning ?? '').trim()
+      const amenityWarning = String(nextResult?.meta?.amenity_warning ?? '').trim()
 
       setChatHistory((currentHistory) => {
         const nextHistory = [
@@ -96,6 +97,10 @@ function App() {
 
         if (sourceWarning) {
           nextHistory.push(createChatEntry('assistant', sourceWarning))
+        }
+
+        if (amenityWarning) {
+          nextHistory.push(createChatEntry('assistant', amenityWarning))
         }
 
         return nextHistory

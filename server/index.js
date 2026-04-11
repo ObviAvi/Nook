@@ -70,6 +70,10 @@ function createEmptyFeatureCollection() {
   }
 }
 
+function createEmptyAmenitiesByCategory(categoryIds) {
+  return Object.fromEntries(categoryIds.map((categoryId) => [categoryId, []]))
+}
+
 async function handleSearch(request, response) {
   const body = await parseJsonBody(request)
   const userPrompt = String(body.userPrompt ?? '').trim()
@@ -108,10 +112,21 @@ async function handleSearch(request, response) {
   const boundingBox = buildBoundingBoxFromListings(listingResult.listings)
   const activeCategoryIds = getActiveCategoryKeys(extractedPreferences.category_weights)
 
-  const amenityResult = await fetchAmenitiesByCategory({
-    bbox: boundingBox,
-    categoryIds: activeCategoryIds,
-  })
+  let amenityResult
+
+  try {
+    amenityResult = await fetchAmenitiesByCategory({
+      bbox: boundingBox,
+      categoryIds: activeCategoryIds,
+    })
+  } catch {
+    amenityResult = {
+      amenitiesByCategory: createEmptyAmenitiesByCategory(activeCategoryIds),
+      featureCollection: createEmptyFeatureCollection(),
+      warning:
+        'Unable to load amenities from Overpass for the selected categories. Continuing with price-only ranking.',
+    }
+  }
 
   const rankingResult = rankListings({
     listings: listingResult.listings,
@@ -129,6 +144,7 @@ async function handleSearch(request, response) {
       listing_source_used: listingResult.source,
       listing_source: listingResult.source,
       listing_warning: listingResult.warning,
+      amenity_warning: amenityResult.warning ?? '',
       listing_count: rankingResult.featureCollection.features.length,
       amenity_count: amenityResult.featureCollection.features.length,
       categories_used: activeCategoryIds,

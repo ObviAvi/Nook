@@ -8,6 +8,7 @@ const OVERPASS_ENDPOINTS = [
 ]
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504])
 const CACHE_TTL_MS = 1000 * 60 * 5
+const CATEGORY_QUERY_DELAY_MS = 120
 const overpassCache = new Map()
 
 function wait(milliseconds) {
@@ -29,7 +30,7 @@ function buildCategoryQuery(categoryId, bbox) {
   )
 
   return `
-[out:json][timeout:25];
+[out:json][timeout:35];
 (
   ${lines.join('\n  ')}
 );
@@ -73,15 +74,17 @@ function setCachedAmenities(cacheKey, payload) {
 
 async function fetchOverpassPayload(query) {
   const errors = []
+  const body = new URLSearchParams({ data: query }).toString()
 
   for (const [index, endpoint] of OVERPASS_ENDPOINTS.entries()) {
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          'Content-Type': 'text/plain;charset=UTF-8',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
         },
-        body: query,
+        body,
       })
 
       if (!response.ok) {
@@ -175,6 +178,7 @@ export async function fetchAmenitiesByCategory({ bbox, categoryIds }) {
   const amenitiesByCategory = {}
   const allAmenityFeatures = []
   let successfulCategoryQueries = 0
+  const failedCategoryIds = []
 
   for (const categoryId of validCategoryIds) {
     try {
@@ -189,16 +193,24 @@ export async function fetchAmenitiesByCategory({ bbox, categoryIds }) {
       successfulCategoryQueries += 1
     } catch {
       amenitiesByCategory[categoryId] = []
+      failedCategoryIds.push(categoryId)
     }
-  }
 
-  if (successfulCategoryQueries === 0) {
-    throw new Error('Unable to load amenities from Overpass for the selected categories.')
+    if (validCategoryIds.length > 1) {
+      await wait(CATEGORY_QUERY_DELAY_MS)
+    }
   }
 
   const dedupedFeatures = Array.from(
     new Map(allAmenityFeatures.map((feature) => [feature.id, feature])).values(),
   )
+
+  const warning =
+    successfulCategoryQueries === 0
+      ? 'Overpass is currently unavailable. Continuing with price-only ranking until amenities recover.'
+      : failedCategoryIds.length
+        ? `Some amenity categories failed to load (${failedCategoryIds.join(', ')}). Ranking used available categories.`
+        : ''
 
   const payload = {
     amenitiesByCategory,
@@ -206,6 +218,7 @@ export async function fetchAmenitiesByCategory({ bbox, categoryIds }) {
       type: 'FeatureCollection',
       features: dedupedFeatures,
     },
+    warning,
   }
 
   setCachedAmenities(cacheKey, payload)

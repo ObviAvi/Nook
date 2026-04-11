@@ -268,6 +268,7 @@ function MapView({
 
       ensureSourcesAndLayers(map)
       setMapData(map, initialApartments, initialAmenities)
+      map.resize()
 
       if (activeApartmentAtLoad?.id) {
         map.setFeatureState(
@@ -351,6 +352,22 @@ function MapView({
       activeApartmentIdRef.current = null
     }
   }, [token, mapStyle])
+
+  useEffect(() => {
+    if (!mapRef.current) {
+      return
+    }
+
+    const handleResize = () => {
+      mapRef.current?.resize()
+    }
+
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
 
   useEffect(() => {
     if (!mapRef.current?.isStyleLoaded()) {
