@@ -23,14 +23,36 @@ RentCast provides a robust API for accessing rental and sale property listings, 
    npm install
    ```
 
-2. **Set up your API key:**
+2. **Set up your API key (choose one method):**
+
+   **Method 1: Using `.env` file (Recommended - Easiest)**
+   ```bash
+   # Copy the example env file
+   cp .env.example .env
+   
+   # Edit .env and replace 'your-api-key-here' with your actual API key
+   ```
+   
+   The `.env` file is automatically loaded when running tests. Simply:
+   ```bash
+   npm test
+   ```
+
+   **Method 2: Environment Variable**
    ```bash
    export RENTCAST_API_KEY="your-api-key-here"
+   npm test
    ```
 
    Or on Windows (PowerShell):
    ```powershell
    $env:RENTCAST_API_KEY = "your-api-key-here"
+   npm test
+   ```
+
+   **Method 3: Command Line Argument**
+   ```bash
+   node test/smoketest.js --key "your-api-key-here"
    ```
 
    Get your API key from the [RentCast API Dashboard](https://app.rentcast.io/app/api)
@@ -169,6 +191,25 @@ new RentCastSmokeTest({
 });
 ```
 
+### .env File Configuration
+
+The service automatically loads the `.env` file from your project directory. Create or edit `.env` with:
+
+```bash
+# Required: Your API key
+RENTCAST_API_KEY=your-actual-api-key
+
+# Optional: Override defaults
+# RENTCAST_TIMEOUT=60000
+# RENTCAST_VERBOSE=true
+```
+
+The `.env` file is:
+- **Required** for easy setup (copy `.env.example` → `.env`)
+- **Automatically loaded** when the service starts
+- **Never committed** to version control (listed in `.gitignore`)
+- **Prioritized** after command-line arguments but before environment variables
+
 ## Rate Limiting
 
 The RentCast API has a rate limit of **20 requests per second** per API key. The smoke test service:
@@ -179,25 +220,34 @@ The RentCast API has a rate limit of **20 requests per second** per API key. The
 
 ## Authentication
 
-API keys should be provided via:
+API keys should be provided via (in order of priority):
 
-1. **Environment variable** (recommended):
+1. **`.env` file** (Recommended for development):
+   ```bash
+   # Create or edit .env file
+   RENTCAST_API_KEY=your-api-key
+   
+   # Tests automatically load from .env
+   npm test
+   ```
+
+2. **Environment variable**:
    ```bash
    export RENTCAST_API_KEY="your-key"
    npm test
    ```
 
-2. **Constructor option**:
+3. **Constructor option**:
    ```javascript
    new RentCastSmokeTest({ apiKey: 'your-key' })
    ```
 
-3. **Command line argument**:
+4. **Command line argument**:
    ```bash
    node test/smoketest.js --key "your-key"
    ```
 
-> ⚠️ **Security Note**: Never commit API keys to version control. Use environment variables or `.env` files (which should be in `.gitignore`).
+> ⚠️ **Security Note**: Never commit `.env` files to version control. Use environment variables or `.env` files for local development only (both are in `.gitignore`).
 
 ## Monitoring
 

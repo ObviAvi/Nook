@@ -7,6 +7,8 @@ const AMENITIES_SOURCE_ID = 'amenities-source'
 const APARTMENTS_LAYER_ID = 'apartments-layer'
 const APARTMENTS_LABEL_LAYER_ID = 'apartments-label-layer'
 const AMENITIES_LAYER_ID = 'amenities-layer'
+const DEFAULT_CENTER = [-122.334, 47.61]
+const DEFAULT_ZOOM = 11.8
 
 const EMPTY_FEATURE_COLLECTION = {
   type: 'FeatureCollection',
@@ -29,6 +31,15 @@ function popupMarkup(title, lines) {
       ${lines.filter(Boolean).map((line) => `<p>${escapeHtml(line)}</p>`).join('')}
     </div>
   `
+}
+
+function buildApartmentPopupLines(apartmentProperties = {}) {
+  return [
+    `Rank #${apartmentProperties.rank_position ?? '?'}`,
+    `${Math.round(Number(apartmentProperties.final_normalized_score ?? 0) * 100)}% match`,
+    `$${Number(apartmentProperties.monthly_price_usd ?? 0).toLocaleString()}/month`,
+    `${apartmentProperties.bedrooms ?? '?'} bd / ${apartmentProperties.bathrooms ?? '?'} ba`,
+  ]
 }
 
 function ensureSourcesAndLayers(map) {
@@ -55,7 +66,7 @@ function ensureSourcesAndLayers(map) {
       source: AMENITIES_SOURCE_ID,
       paint: {
         'circle-radius': 4.5,
-        'circle-color': ['coalesce', ['get', 'color'], '#0ea5e9'],
+        'circle-color': ['coalesce', ['get', 'color'], '#8fd3ff'],
         'circle-stroke-width': 1,
         'circle-stroke-color': '#0f172a',
         'circle-opacity': 0.85,
@@ -126,12 +137,14 @@ function ensureSourcesAndLayers(map) {
         ],
         'text-size': 10,
         'text-font': ['Open Sans Bold'],
-        'text-offset': [0, 1.4],
+        'text-offset': [0, 2.35],
+        'text-anchor': 'top',
+        'text-max-width': 12,
       },
       paint: {
-        'text-color': '#f8fafc',
-        'text-halo-color': '#0f172a',
-        'text-halo-width': 1,
+        'text-color': '#fffdf9',
+        'text-halo-color': '#171512',
+        'text-halo-width': 2.4,
       },
     })
   }
@@ -140,6 +153,32 @@ function ensureSourcesAndLayers(map) {
 function setMapData(map, apartments, amenities) {
   map.getSource(APARTMENTS_SOURCE_ID)?.setData(apartments)
   map.getSource(AMENITIES_SOURCE_ID)?.setData(amenities)
+}
+
+function getCollectionBounds(featureCollection) {
+  const features = featureCollection?.features ?? []
+
+  if (!features.length) {
+    return null
+  }
+
+  const bounds = new mapboxgl.LngLatBounds()
+  let hasPoint = false
+
+  for (const feature of features) {
+    if (feature?.geometry?.type !== 'Point') {
+      continue
+    }
+
+    const [lng, lat] = feature.geometry.coordinates ?? []
+
+    if (Number.isFinite(lng) && Number.isFinite(lat)) {
+      bounds.extend([lng, lat])
+      hasPoint = true
+    }
+  }
+
+  return hasPoint ? bounds : null
 }
 
 function MapView({
@@ -156,6 +195,9 @@ function MapView({
   const popupRef = useRef(null)
   const onSelectApartmentRef = useRef(onSelectApartment)
   const onViewUpdateRef = useRef(onViewUpdate)
+  const apartmentsRef = useRef(apartments)
+  const amenitiesRef = useRef(amenities)
+  const activeApartmentRef = useRef(activeApartment)
   const hoveredApartmentIdRef = useRef(null)
   const activeApartmentIdRef = useRef(null)
   const [mapError, setMapError] = useState('')
@@ -169,17 +211,30 @@ function MapView({
   }, [onViewUpdate])
 
   useEffect(() => {
+    apartmentsRef.current = apartments
+  }, [apartments])
+
+  useEffect(() => {
+    amenitiesRef.current = amenities
+  }, [amenities])
+
+  useEffect(() => {
+    activeApartmentRef.current = activeApartment
+  }, [activeApartment])
+
+  useEffect(() => {
     if (!token || !mapContainerRef.current) {
       return
     }
 
     mapboxgl.accessToken = token
+    const initialActiveApartment = activeApartmentRef.current
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: mapStyle,
-      center: activeApartment?.geometry?.coordinates ?? [-122.334, 47.61],
-      zoom: activeApartment ? 13.8 : 11.5,
+      center: initialActiveApartment?.geometry?.coordinates ?? DEFAULT_CENTER,
+      zoom: initialActiveApartment ? 13.8 : DEFAULT_ZOOM,
       pitch: 52,
       bearing: -18,
       antialias: true,
@@ -199,27 +254,27 @@ function MapView({
     })
 
     map.on('load', () => {
-      ensureSourcesAndLayers(map)
-      setMapData(map, apartments, amenities)
+      const initialApartments = apartmentsRef.current
+      const initialAmenities = amenitiesRef.current
+      const activeApartmentAtLoad = activeApartmentRef.current
 
-      if (activeApartment?.id) {
+      map.setFog({
+        color: 'rgb(10, 23, 41)',
+        'high-color': 'rgb(69, 108, 183)',
+        'horizon-blend': 0.18,
+        'space-color': 'rgb(5, 10, 18)',
+        'star-intensity': 0.08,
+      })
+
+      ensureSourcesAndLayers(map)
+      setMapData(map, initialApartments, initialAmenities)
+
+      if (activeApartmentAtLoad?.id) {
         map.setFeatureState(
-          { source: APARTMENTS_SOURCE_ID, id: activeApartment.id },
+          { source: APARTMENTS_SOURCE_ID, id: activeApartmentAtLoad.id },
           { active: true },
         )
-        activeApartmentIdRef.current = activeApartment.id
-
-        popupRef.current?.remove()
-        popupRef.current = new mapboxgl.Popup({ offset: 16 })
-          .setLngLat(activeApartment.geometry.coordinates)
-          .setHTML(
-            popupMarkup(activeApartment.properties.formatted_address, [
-              `Rank #${activeApartment.properties.rank_position}`,
-              `${Math.round(activeApartment.properties.final_normalized_score * 100)}% match`,
-              `$${Number(activeApartment.properties.monthly_price_usd).toLocaleString()}/month`,
-            ]),
-          )
-          .addTo(map)
+        activeApartmentIdRef.current = activeApartmentAtLoad.id
       }
 
       map.on('mousemove', APARTMENTS_LAYER_ID, (event) => {
@@ -342,31 +397,136 @@ function MapView({
       duration: 900,
       essential: true,
     })
+  }, [activeApartment])
+
+  useEffect(() => {
+    if (!activeApartment || !mapRef.current?.isStyleLoaded()) {
+      return
+    }
 
     popupRef.current?.remove()
     popupRef.current = new mapboxgl.Popup({ offset: 16 })
       .setLngLat(activeApartment.geometry.coordinates)
       .setHTML(
-        popupMarkup(activeApartment.properties.formatted_address, [
-          `Rank #${activeApartment.properties.rank_position}`,
-          `${Math.round(activeApartment.properties.final_normalized_score * 100)}% match`,
-          `$${Number(activeApartment.properties.monthly_price_usd).toLocaleString()}/month`,
-          `${activeApartment.properties.bedrooms} bd / ${activeApartment.properties.bathrooms} ba`,
-        ]),
+        popupMarkup(activeApartment.properties.formatted_address, buildApartmentPopupLines(activeApartment.properties)),
       )
       .addTo(mapRef.current)
   }, [activeApartment])
 
+  const resetToOverview = () => {
+    if (!mapRef.current) {
+      return
+    }
+
+    const bounds = getCollectionBounds(apartments)
+
+    if (bounds) {
+      mapRef.current.fitBounds(bounds, {
+        padding: 100,
+        maxZoom: 14,
+        duration: 900,
+      })
+      return
+    }
+
+    mapRef.current.easeTo({
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      pitch: 48,
+      bearing: -18,
+      duration: 900,
+    })
+  }
+
+  const applyZoomPreset = (zoom) => {
+    if (!mapRef.current) {
+      return
+    }
+
+    mapRef.current.easeTo({
+      zoom,
+      duration: 700,
+    })
+  }
+
+  const adjustPitch = (delta) => {
+    if (!mapRef.current) {
+      return
+    }
+
+    const nextPitch = Math.max(0, Math.min(78, mapRef.current.getPitch() + delta))
+
+    mapRef.current.easeTo({
+      pitch: nextPitch,
+      duration: 320,
+    })
+  }
+
+  const adjustBearing = (delta) => {
+    if (!mapRef.current) {
+      return
+    }
+
+    mapRef.current.easeTo({
+      bearing: mapRef.current.getBearing() + delta,
+      duration: 320,
+    })
+  }
+
+  const cinematicView = () => {
+    if (!mapRef.current) {
+      return
+    }
+
+    mapRef.current.easeTo({
+      center: activeApartment?.geometry.coordinates ?? DEFAULT_CENTER,
+      zoom: activeApartment ? 16.1 : 13.2,
+      pitch: 68,
+      bearing: -32,
+      duration: 900,
+    })
+  }
+
   return (
-    <section className="map-panel glass-card">
-      <header className="map-header">
+    <section className="map-panel">
+      <header className="map-header glass-card">
         <div>
-          <p className="label">Agentic Map</p>
-          <h1>Nook Ranking Surface</h1>
+          <p className="label">Nook</p>
+          <h1>Neighborhood Fit Explorer</h1>
         </div>
-        <p className="gesture-hint">Hover for feature-state highlight. Click to inspect ranked rationale.</p>
+        <div className="map-actions">
+          <button type="button" onClick={resetToOverview}>
+            Search Area
+          </button>
+          <button type="button" onClick={() => applyZoomPreset(14)}>
+            Overview
+          </button>
+          <button type="button" onClick={() => applyZoomPreset(16.25)}>
+            Detail
+          </button>
+          <button type="button" onClick={() => adjustPitch(-8)}>
+            Tilt -
+          </button>
+          <button type="button" onClick={() => adjustPitch(8)}>
+            Tilt +
+          </button>
+          <button type="button" onClick={() => adjustBearing(-15)}>
+            Rotate -
+          </button>
+          <button type="button" onClick={() => adjustBearing(15)}>
+            Rotate +
+          </button>
+          <button type="button" onClick={cinematicView}>
+            3D View
+          </button>
+        </div>
       </header>
-      {mapError ? <p className="map-error">{mapError}</p> : null}
+
+      <p className="gesture-hint">
+        Tip: larger markers indicate stronger matches. Click a listing or amenity for details.
+      </p>
+
+      {mapError ? <p className="map-error glass-card">{mapError}</p> : null}
       <div ref={mapContainerRef} className="map-canvas" />
     </section>
   )

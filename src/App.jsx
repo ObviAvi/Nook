@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import LlmSidebar from './components/LlmSidebar'
 import MapView from './components/MapView'
 import MetricsSidebar from './components/MetricsSidebar'
@@ -83,14 +83,23 @@ function App() {
       const listingCount = Number(nextResult?.meta?.listing_count ?? 0)
       const sourceUsed =
         nextResult?.meta?.listing_source_used ?? nextResult?.meta?.listing_source ?? 'mock'
+      const sourceWarning = String(nextResult?.meta?.listing_warning ?? '').trim()
 
-      setChatHistory((currentHistory) => [
-        ...currentHistory,
-        createChatEntry(
-          'assistant',
-          `Ranked ${listingCount} listing${listingCount === 1 ? '' : 's'} using ${sourceUsed}.`,
-        ),
-      ])
+      setChatHistory((currentHistory) => {
+        const nextHistory = [
+          ...currentHistory,
+          createChatEntry(
+            'assistant',
+            `Ranked ${listingCount} listing${listingCount === 1 ? '' : 's'} using ${sourceUsed}.`,
+          ),
+        ]
+
+        if (sourceWarning) {
+          nextHistory.push(createChatEntry('assistant', sourceWarning))
+        }
+
+        return nextHistory
+      })
     } catch (error) {
       setSearchResult(null)
       setActiveApartmentId(null)
@@ -106,10 +115,6 @@ function App() {
       setIsLoading(false)
     }
   }, [])
-
-  useEffect(() => {
-    void submitSearch(DEFAULT_PROMPT, 'mock')
-  }, [submitSearch])
 
   if (!token) {
     return (
