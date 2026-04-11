@@ -1,7 +1,4 @@
 function Sidebar({
-  viewState,
-  mapStyle,
-  onStyleChange,
   timeOfDayHour,
   onTimeOfDayChange,
   regions,
@@ -11,8 +8,6 @@ function Sidebar({
   searchRadiusMeters,
   onSearchRadiusChange,
   serviceCategories,
-  selectedCategoryIds,
-  onToggleCategory,
   categoryImportance,
   onCategoryImportanceChange,
   normalizedCategoryWeights,
@@ -21,18 +16,16 @@ function Sidebar({
   normalizedPriceWeight,
   preferredMonthlyRent,
   onPreferredMonthlyRentChange,
+  sidebarMode,
+  showPreferencesDrawer,
+  onTogglePreferencesDrawer,
   onSubmitSearch,
-  isLoadingPois,
   searchError,
-  lastSearchSummary,
-  poiCountsByCategory,
   listings,
-  rankedApartmentMap,
   activeListing,
   onSelectListing,
   onRecenterOnRegion,
 }) {
-  const formatValue = (value) => value.toFixed(4)
   const formatPercent = (value) => `${Math.round(value * 100)}%`
   const formatCurrency = (amount) =>
     amount.toLocaleString(undefined, {
@@ -72,11 +65,11 @@ function Sidebar({
     return 'Dusk'
   }
 
-  return (
-    <aside className="sidebar glass-card">
+  const renderPreferenceControls = () => (
+    <>
       <section>
-        <p className="label">Area Setup</p>
-        <h2>Search Region</h2>
+        <p className="label">Search Setup</p>
+        <h2>Set Your Priorities</h2>
         <label className="field-stack">
           <span>Sample area</span>
           <select
@@ -96,7 +89,7 @@ function Sidebar({
         <div className="radius-card">
           <div className="time-slider-head">
             <strong>{formatDistance(searchRadiusMeters)}</strong>
-            <span>Overpass Radius</span>
+            <span>Search Radius</span>
           </div>
           <input
             className="time-slider"
@@ -116,59 +109,29 @@ function Sidebar({
         </div>
 
         <div className="stacked-actions">
-          <button type="button" className="launch-button" onClick={onSubmitSearch}>
-            {isLoadingPois ? 'Loading OSM data...' : 'Search Selected Services'}
-          </button>
+          {sidebarMode === 'setup' ? (
+            <button type="button" className="launch-button" onClick={onSubmitSearch}>
+              Show Listings
+            </button>
+          ) : null}
           <button type="button" className="secondary-button" onClick={onRecenterOnRegion}>
             Recenter Map
           </button>
         </div>
 
-        {lastSearchSummary ? <p className="status-copy">{lastSearchSummary}</p> : null}
         {searchError ? <p className="inline-error">{searchError}</p> : null}
       </section>
 
       <section>
-        <p className="label">Filters</p>
-        <h2>Service Categories</h2>
-        <div className="service-grid">
-          {serviceCategories.map((category) => {
-            const isActive = selectedCategoryIds.includes(category.id)
-            const count = poiCountsByCategory[category.id] ?? 0
-
-            return (
-              <label
-                key={category.id}
-                className={`service-card ${isActive ? 'active' : ''}`}
-                style={{ '--service-color': category.color }}
-              >
-                <input
-                  type="checkbox"
-                  checked={isActive}
-                  onChange={() => onToggleCategory(category.id)}
-                />
-                <div>
-                  <strong>{category.label}</strong>
-                  <span>{category.description}</span>
-                  <small>{count} loaded from OSM</small>
-                </div>
-              </label>
-            )
-          })}
-        </div>
-      </section>
-
-      <section>
-        <p className="label">Ranking Inputs</p>
-        <h2>Weighted Preferences</h2>
+        <p className="label">Weighted Preferences</p>
+        <h2>Your Priorities</h2>
         <div className="preference-stack">
           {serviceCategories.map((category) => {
-            const isActive = selectedCategoryIds.includes(category.id)
             const rawImportance = categoryImportance[category.id] ?? 0
             const normalizedWeight = normalizedCategoryWeights[category.id] ?? 0
 
             return (
-              <div key={category.id} className={`preference-card ${isActive ? 'active' : ''}`}>
+              <div key={category.id} className="preference-card active">
                 <div className="preference-head">
                   <strong>{category.label}</strong>
                   <span>
@@ -182,7 +145,6 @@ function Sidebar({
                   max="1"
                   step="0.05"
                   value={rawImportance}
-                  disabled={!isActive}
                   onChange={(event) =>
                     onCategoryImportanceChange(category.id, Number(event.target.value))
                   }
@@ -235,20 +197,45 @@ function Sidebar({
           </div>
         </div>
       </section>
+    </>
+  )
+
+  const renderResults = () => (
+    <>
+      <section>
+        <div className="results-head">
+          <div>
+            <p className="label">Ranked Apartments</p>
+            <h2>Best Fits In {selectedRegion.name}</h2>
+          </div>
+          <button
+            type="button"
+            className="secondary-button compact-button"
+            onClick={onTogglePreferencesDrawer}
+          >
+            {showPreferencesDrawer ? 'Hide Preferences' : 'Adjust Preferences'}
+          </button>
+        </div>
+        <p className="section-copy">
+          Rankings update instantly from your weighted preferences using the
+          neighborhood services that were already loaded.
+        </p>
+      </section>
+
+      {showPreferencesDrawer ? (
+        <div className="preferences-drawer">
+          {renderPreferenceControls()}
+        </div>
+      ) : null}
 
       <section>
-        <p className="label">Ranked Listings</p>
-        <h2>Best Matches Right Now</h2>
         <ul className="listing-list">
           {listings.map((listing) => {
             const isActive = activeListing?.properties.id === listing.properties.id
-            const breakdownText = selectedCategoryIds
+            const breakdownText = serviceCategories
               .map((categoryId) => {
-                const category = serviceCategories.find(
-                  (candidate) => candidate.id === categoryId,
-                )
-                const count = listing.properties.serviceBreakdown[categoryId] ?? 0
-                return `${count} ${category?.shortLabel ?? categoryId}`
+                const count = listing.properties.serviceBreakdown[categoryId.id] ?? 0
+                return `${count} ${categoryId.shortLabel ?? categoryId.id}`
               })
               .join(' / ')
 
@@ -281,68 +268,12 @@ function Sidebar({
           })}
         </ul>
       </section>
+    </>
+  )
 
-      {activeListing ? (
-        <section className="selected-card">
-          <p className="label">Selected Listing</p>
-          <h2>{activeListing.properties.title}</h2>
-          <p>
-            {activeListing.properties.neighborhood} /{' '}
-            {formatCurrency(activeListing.properties.monthlyRent)} /{' '}
-            {activeListing.properties.sqft} sq ft
-          </p>
-          <p>
-            Nearby selected services: {activeListing.properties.rankLabel}
-            {activeListing.properties.closestPoiDistance !== null
-              ? ` / closest match ${formatDistance(activeListing.properties.closestPoiDistance)} away`
-              : ''}
-          </p>
-          <p>
-            Price score {formatPercent(activeListing.properties.priceScore)} / weighted price contribution{' '}
-            {formatPercent(activeListing.properties.priceContribution)}
-          </p>
-        </section>
-      ) : null}
-
-      <section>
-        <p className="label">Schemas</p>
-        <h2>Communication Shapes</h2>
-        <div className="schema-card">
-          <strong>Category Weights</strong>
-          <pre>{JSON.stringify(normalizedCategoryWeights, null, 2)}</pre>
-        </div>
-        <div className="schema-card">
-          <strong>Ranked Apartments</strong>
-          <pre>{JSON.stringify(rankedApartmentMap, null, 2)}</pre>
-        </div>
-      </section>
-
-      <section>
-        <p className="label">Style</p>
-        <h2>Visual Mode</h2>
-        <div className="segmented-control" role="radiogroup" aria-label="Map Style">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={mapStyle === 'mapbox://styles/mapbox/standard'}
-            className={mapStyle === 'mapbox://styles/mapbox/standard' ? 'active' : ''}
-            onClick={() => onStyleChange('mapbox://styles/mapbox/standard')}
-          >
-            Standard
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={mapStyle === 'mapbox://styles/mapbox/satellite-streets-v12'}
-            className={
-              mapStyle === 'mapbox://styles/mapbox/satellite-streets-v12' ? 'active' : ''
-            }
-            onClick={() => onStyleChange('mapbox://styles/mapbox/satellite-streets-v12')}
-          >
-            Satellite
-          </button>
-        </div>
-      </section>
+  return (
+    <aside className="sidebar glass-card">
+      {sidebarMode === 'setup' ? renderPreferenceControls() : renderResults()}
 
       <section>
         <p className="label">Lighting</p>
@@ -369,33 +300,6 @@ function Sidebar({
             <span>18:00</span>
             <span>24:00</span>
           </div>
-        </div>
-      </section>
-
-      <section>
-        <p className="label">Map State</p>
-        <h2>Live Coordinates</h2>
-        <div className="stat-grid">
-          <article>
-            <span>Longitude</span>
-            <strong>{formatValue(viewState.lng)}</strong>
-          </article>
-          <article>
-            <span>Latitude</span>
-            <strong>{formatValue(viewState.lat)}</strong>
-          </article>
-          <article>
-            <span>Zoom</span>
-            <strong>{formatValue(viewState.zoom)}</strong>
-          </article>
-          <article>
-            <span>Pitch</span>
-            <strong>{formatValue(viewState.pitch)}</strong>
-          </article>
-          <article>
-            <span>Bearing</span>
-            <strong>{formatValue(viewState.bearing)}</strong>
-          </article>
         </div>
       </section>
     </aside>

@@ -11,7 +11,6 @@ import { distanceMeters } from './lib/geo'
 import { fetchPoisForArea } from './lib/overpass'
 import {
   buildDefaultCategoryImportance,
-  createRankedApartmentMap,
   defaultRankingPreferences,
   normalizeUserPreferences,
   rankListingsWithPreferences,
@@ -20,14 +19,6 @@ import './App.css'
 
 const LISTING_MATCH_RADIUS_METERS = 1200
 const DEFAULT_REGION = sampleRegions[0]
-
-function buildPoiCountsByCategory(poiFeatures) {
-  return poiFeatures.reduce((counts, feature) => {
-    const categoryId = feature.properties.categoryId
-    counts[categoryId] = (counts[categoryId] ?? 0) + 1
-    return counts
-  }, {})
-}
 
 function getDefaultPreferredMonthlyRent(listings) {
   const totalRent = listings.reduce(
@@ -42,6 +33,8 @@ function App() {
   const token = import.meta.env.VITE_MAPBOX_TOKEN
   const [experienceStarted, setExperienceStarted] = useState(false)
   const [landingQuery, setLandingQuery] = useState('')
+  const [sidebarMode, setSidebarMode] = useState('setup')
+  const [showPreferencesDrawer, setShowPreferencesDrawer] = useState(false)
   const [mapStyle, setMapStyle] = useState('mapbox://styles/mapbox/standard')
   const [timeOfDayHour, setTimeOfDayHour] = useState(15.25)
   const [selectedRegionId, setSelectedRegionId] = useState(DEFAULT_REGION.id)
@@ -49,9 +42,7 @@ function App() {
   const [searchRadiusMeters, setSearchRadiusMeters] = useState(
     DEFAULT_REGION.radiusMeters,
   )
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState(
-    defaultServiceCategoryIds,
-  )
+  const [selectedCategoryIds] = useState(defaultServiceCategoryIds)
   const [categoryImportance, setCategoryImportance] = useState(() =>
     buildDefaultCategoryImportance(serviceCategories),
   )
@@ -62,20 +53,11 @@ function App() {
     getDefaultPreferredMonthlyRent(fakeListings.features),
   )
   const [poiFeatures, setPoiFeatures] = useState([])
-  const [isLoadingPois, setIsLoadingPois] = useState(false)
   const [searchError, setSearchError] = useState('')
-  const [lastSearchSummary, setLastSearchSummary] = useState('')
   const [activeListingId, setActiveListingId] = useState(null)
   const [focusTarget, setFocusTarget] = useState({
     key: `region-${DEFAULT_REGION.id}`,
     center: DEFAULT_REGION.center,
-    zoom: DEFAULT_REGION.zoom,
-    pitch: DEFAULT_REGION.pitch,
-    bearing: DEFAULT_REGION.bearing,
-  })
-  const [viewState, setViewState] = useState({
-    lng: DEFAULT_REGION.center[0],
-    lat: DEFAULT_REGION.center[1],
     zoom: DEFAULT_REGION.zoom,
     pitch: DEFAULT_REGION.pitch,
     bearing: DEFAULT_REGION.bearing,
@@ -111,10 +93,8 @@ function App() {
     matchRadiusMeters: LISTING_MATCH_RADIUS_METERS,
     distanceMeters,
   })
-  const rankedApartmentMap = createRankedApartmentMap(rankedListings)
   const activeListing =
     rankedListings.find((listing) => listing.properties.id === activeListingId) ?? null
-  const poiCountsByCategory = buildPoiCountsByCategory(poiFeatures)
   const landingSuggestions = sampleRegions.filter((region) =>
     region.name.toLowerCase().includes(landingQuery.trim().toLowerCase()),
   )
@@ -124,19 +104,16 @@ function App() {
   }, [regionListings])
 
   const performPoiSearch = useCallback(
-    async ({ center, radiusMeters, categoryIds, regionName }) => {
+    async ({ center, radiusMeters, categoryIds }) => {
       const searchId = latestSearchIdRef.current + 1
       latestSearchIdRef.current = searchId
 
       if (!categoryIds.length) {
         setPoiFeatures([])
-        setIsLoadingPois(false)
         setSearchError('Select at least one service category before searching.')
-        setLastSearchSummary('')
         return
       }
 
-      setIsLoadingPois(true)
       setSearchError('')
 
       try {
@@ -151,36 +128,36 @@ function App() {
         }
 
         setPoiFeatures(nextPois)
-        setLastSearchSummary(
-          `${nextPois.length} live OSM matches loaded for ${regionName}.`,
-        )
       } catch (error) {
         if (latestSearchIdRef.current !== searchId) {
           return
         }
 
         setPoiFeatures([])
-        setLastSearchSummary('')
         setSearchError(
           error instanceof Error
             ? error.message
             : 'Unable to load POIs from Overpass right now.',
         )
       } finally {
-        if (latestSearchIdRef.current === searchId) {
-          setIsLoadingPois(false)
-        }
+        // No loading state is surfaced in the current setup/results UI.
       }
     },
     [],
   )
 
   useEffect(() => {
+    if (!experienceStarted) {
+      return
+    }
+
     const nextCenter = selectedRegion.center
     const nextRadius = selectedRegion.radiusMeters
 
     setSearchCenter(nextCenter)
     setSearchRadiusMeters(nextRadius)
+    setSidebarMode('setup')
+    setShowPreferencesDrawer(false)
     setFocusTarget({
       key: `region-${selectedRegion.id}-${Date.now()}`,
       center: selectedRegion.center,
@@ -193,9 +170,8 @@ function App() {
       center: nextCenter,
       radiusMeters: nextRadius,
       categoryIds: selectedCategoryIdsRef.current,
-      regionName: selectedRegion.name,
     })
-  }, [performPoiSearch, selectedRegion])
+  }, [experienceStarted, performPoiSearch, selectedRegion])
 
   useEffect(() => {
     if (!rankedListings.length) {
@@ -246,15 +222,17 @@ function App() {
     setSelectedRegionId(regionId)
     setActiveListingId(null)
     setExperienceStarted(true)
+    setSidebarMode('setup')
+    setShowPreferencesDrawer(false)
   }
 
   const handleSearchSubmit = () => {
-    void performPoiSearch({
-      center: searchCenter,
-      radiusMeters: searchRadiusMeters,
-      categoryIds: selectedCategoryIds,
-      regionName: selectedRegion.name,
-    })
+    setSidebarMode('results')
+    setShowPreferencesDrawer(false)
+
+    if (rankedListings[0]) {
+      handleSelectListing(rankedListings[0].properties.id)
+    }
   }
 
   const handleRecenterOnRegion = () => {
@@ -282,6 +260,8 @@ function App() {
     setLandingQuery(matchingRegion.name)
     setActiveListingId(null)
     setExperienceStarted(true)
+    setSidebarMode('setup')
+    setShowPreferencesDrawer(false)
     setFocusTarget({
       key: `region-${matchingRegion.id}-${Date.now()}`,
       center: matchingRegion.center,
@@ -321,30 +301,17 @@ function App() {
         activeListing={activeListing}
         focusTarget={focusTarget}
         onSelectListing={handleSelectListing}
-        onViewUpdate={setViewState}
+        onViewUpdate={() => {}}
         landingQuery={landingQuery}
         onLandingQueryChange={setLandingQuery}
         landingSuggestions={landingSuggestions}
         onLandingSubmit={handleLandingSubmit}
         onLandingSuggestionSelect={(region) => {
           setLandingQuery(region.name)
-          setSelectedRegionId(region.id)
-          setActiveListingId(null)
-          setExperienceStarted(true)
-          setFocusTarget({
-            key: `region-${region.id}-${Date.now()}`,
-            center: region.center,
-            zoom: region.zoom,
-            pitch: region.pitch,
-            bearing: region.bearing,
-          })
         }}
       />
       {experienceStarted ? (
         <Sidebar
-          viewState={viewState}
-          mapStyle={mapStyle}
-          onStyleChange={setMapStyle}
           timeOfDayHour={timeOfDayHour}
           onTimeOfDayChange={setTimeOfDayHour}
           regions={sampleRegions}
@@ -354,14 +321,6 @@ function App() {
           searchRadiusMeters={searchRadiusMeters}
           onSearchRadiusChange={setSearchRadiusMeters}
           serviceCategories={serviceCategories}
-          selectedCategoryIds={selectedCategoryIds}
-          onToggleCategory={(categoryId) => {
-            setSelectedCategoryIds((currentCategories) =>
-              currentCategories.includes(categoryId)
-                ? currentCategories.filter((currentCategoryId) => currentCategoryId !== categoryId)
-                : [...currentCategories, categoryId],
-            )
-          }}
           categoryImportance={categoryImportance}
           onCategoryImportanceChange={(categoryId, value) => {
             setCategoryImportance((currentImportance) => ({
@@ -375,13 +334,14 @@ function App() {
           normalizedPriceWeight={normalizedPreferences.priceWeight}
           preferredMonthlyRent={preferredMonthlyRent}
           onPreferredMonthlyRentChange={setPreferredMonthlyRent}
+          sidebarMode={sidebarMode}
+          showPreferencesDrawer={showPreferencesDrawer}
+          onTogglePreferencesDrawer={() =>
+            setShowPreferencesDrawer((currentValue) => !currentValue)
+          }
           onSubmitSearch={handleSearchSubmit}
-          isLoadingPois={isLoadingPois}
           searchError={searchError}
-          lastSearchSummary={lastSearchSummary}
-          poiCountsByCategory={poiCountsByCategory}
           listings={rankedListings}
-          rankedApartmentMap={rankedApartmentMap}
           activeListing={activeListing}
           onSelectListing={handleSelectListing}
           onRecenterOnRegion={handleRecenterOnRegion}

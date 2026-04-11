@@ -29,7 +29,9 @@ export const serviceCategories = [
   },
 ]
 
-export const defaultServiceCategoryIds = ['groceries', 'parks', 'gyms']
+export const defaultServiceCategoryIds = serviceCategories.map(
+  (category) => category.id,
+)
 
 export const serviceCategoryMap = Object.fromEntries(
   serviceCategories.map((category) => [category.id, category]),

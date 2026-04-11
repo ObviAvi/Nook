@@ -13,6 +13,9 @@ const LISTINGS_LAYER_ID = 'listings-layer'
 const LISTINGS_LABEL_LAYER_ID = 'listings-labels'
 const LISTINGS_ACTIVE_LAYER_ID = 'listings-active'
 const POIS_LAYER_ID = 'pois-layer'
+const POIS_LABEL_LAYER_ID = 'pois-labels'
+const LANDING_CENTER = [0, 16]
+const LANDING_ZOOM = 0.52
 
 function createFeatureCollection(features) {
   return {
@@ -145,6 +148,22 @@ function getPopupMarkup(title, bodyLines) {
   `
 }
 
+function getListingPopupLines(listingProperties = {}) {
+  return [
+    `${escapeHtml(
+      listingProperties.summary ?? listingProperties.neighborhood ?? 'Neighborhood',
+    )}`,
+    `${escapeHtml(listingProperties.homeType ?? 'Rental')} / $${Number(
+      listingProperties.monthlyRent ?? 0,
+    ).toLocaleString()}/mo`,
+    `${listingProperties.beds ?? '?'} bd / ${listingProperties.baths ?? '?'} ba / ${
+      listingProperties.sqft ?? '?'
+    } sq ft`,
+    `${escapeHtml(listingProperties.highlight ?? '')}`,
+    `${listingProperties.rankLabel ?? ''}`,
+  ]
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -193,14 +212,22 @@ function createListingData(listings, activeListingId) {
       properties: {
         ...listing.properties,
         active: listing.properties.id === activeListingId,
-        priceLabel: `$${(listing.properties.monthlyRent / 1000).toFixed(1)}k`,
+        priceLabel: `${listing.properties.title}\n$${(listing.properties.monthlyRent / 1000).toFixed(1)}k / ${listing.properties.homeType}`,
       },
     })),
   )
 }
 
 function createPoiData(poiFeatures) {
-  return createFeatureCollection(poiFeatures)
+  return createFeatureCollection(
+    poiFeatures.map((poiFeature) => ({
+      ...poiFeature,
+      properties: {
+        ...poiFeature.properties,
+        mapLabel: `${poiFeature.properties.categoryLabel}\n${poiFeature.properties.name}`,
+      },
+    })),
+  )
 }
 
 function ensureMapSourcesAndLayers(map) {
@@ -318,12 +345,14 @@ function ensureMapSourcesAndLayers(map) {
         'text-field': ['get', 'priceLabel'],
         'text-size': 11,
         'text-font': ['Open Sans Bold'],
-        'text-offset': [0, 1.5],
+        'text-offset': [0, 2.35],
+        'text-anchor': 'top',
+        'text-max-width': 12,
       },
       paint: {
         'text-color': '#fffdf9',
-        'text-halo-color': '#1f1321',
-        'text-halo-width': 1.2,
+        'text-halo-color': '#171512',
+        'text-halo-width': 2.4,
       },
     })
   }
@@ -346,6 +375,29 @@ function ensureMapSourcesAndLayers(map) {
         'circle-stroke-color': '#062033',
         'circle-stroke-width': 1.5,
         'circle-opacity': 0.86,
+      },
+    })
+  }
+
+  if (!map.getLayer(POIS_LABEL_LAYER_ID)) {
+    map.addLayer({
+      id: POIS_LABEL_LAYER_ID,
+      type: 'symbol',
+      source: POIS_SOURCE_ID,
+      minzoom: 14.4,
+      layout: {
+        'text-field': ['get', 'mapLabel'],
+        'text-size': 10,
+        'text-font': ['Open Sans Semibold'],
+        'text-offset': [0, 1.7],
+        'text-anchor': 'top',
+        'text-max-width': 11,
+      },
+      paint: {
+        'text-color': '#f8f4ec',
+        'text-halo-color': '#0f131d',
+        'text-halo-width': 2,
+        'text-opacity': 0.92,
       },
     })
   }
@@ -386,6 +438,7 @@ function MapView({
   const onSelectListingRef = useRef(onSelectListing)
   const onViewUpdateRef = useRef(onViewUpdate)
   const experienceStartedRef = useRef(experienceStarted)
+  const landingSpinFrameRef = useRef(null)
   const mapDataRef = useRef({
     searchCenter,
     searchRadiusMeters,
@@ -438,10 +491,10 @@ function MapView({
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: mapStyle,
-      center: currentExperienceStarted ? currentMapData.searchCenter : [8, 18],
+      center: currentExperienceStarted ? currentMapData.searchCenter : LANDING_CENTER,
       zoom: currentExperienceStarted
         ? getOverviewZoom(currentMapData.searchRadiusMeters)
-        : 1.3,
+        : LANDING_ZOOM,
       pitch: currentExperienceStarted ? 52 : 0,
       bearing: currentExperienceStarted ? -18 : 0,
       projection: currentExperienceStarted ? 'mercator' : 'globe',
@@ -486,7 +539,7 @@ function MapView({
       })
       applyLightingForHour(map, latestMapData.timeOfDayHour)
 
-      map.on('click', LISTINGS_LAYER_ID, (event) => {
+      const openListingPopup = (event) => {
         const listingFeature = event.features?.[0]
 
         if (!listingFeature) {
@@ -503,15 +556,16 @@ function MapView({
         popupRef.current = new mapboxgl.Popup({ offset: 18 })
           .setLngLat(event.lngLat)
           .setHTML(
-            getPopupMarkup(escapeHtml(listingFeature.properties?.title ?? 'Listing'), [
-              `${escapeHtml(listingFeature.properties?.neighborhood ?? 'Neighborhood')}`,
-              `$${Number(listingFeature.properties?.monthlyRent ?? 0).toLocaleString()}/mo`,
-              `${listingFeature.properties?.beds ?? '?'} bd / ${listingFeature.properties?.baths ?? '?'} ba`,
-              `${listingFeature.properties?.rankLabel ?? ''}`,
-            ]),
+            getPopupMarkup(
+              escapeHtml(listingFeature.properties?.title ?? 'Listing'),
+              getListingPopupLines(listingFeature.properties),
+            ),
           )
           .addTo(map)
-      })
+      }
+
+      map.on('click', LISTINGS_LAYER_ID, openListingPopup)
+      map.on('click', LISTINGS_LABEL_LAYER_ID, openListingPopup)
 
       map.on('click', POIS_LAYER_ID, (event) => {
         const poiFeature = event.features?.[0]
@@ -532,7 +586,7 @@ function MapView({
           .addTo(map)
       })
 
-      for (const layerId of [LISTINGS_LAYER_ID, POIS_LAYER_ID]) {
+      for (const layerId of [LISTINGS_LAYER_ID, LISTINGS_LABEL_LAYER_ID, POIS_LAYER_ID]) {
         map.on('mouseenter', layerId, () => {
           map.getCanvas().style.cursor = 'pointer'
         })
@@ -548,6 +602,10 @@ function MapView({
     })
 
     return () => {
+      if (landingSpinFrameRef.current) {
+        window.cancelAnimationFrame(landingSpinFrameRef.current)
+        landingSpinFrameRef.current = null
+      }
       popupRef.current?.remove()
       popupRef.current = null
       map.remove()
@@ -558,6 +616,11 @@ function MapView({
   useEffect(() => {
     if (!mapRef.current?.isStyleLoaded()) {
       return
+    }
+
+    if (landingSpinFrameRef.current) {
+      window.cancelAnimationFrame(landingSpinFrameRef.current)
+      landingSpinFrameRef.current = null
     }
 
     if (experienceStarted) {
@@ -577,12 +640,26 @@ function MapView({
     }
 
     mapRef.current.easeTo({
-      center: [8, 18],
-      zoom: 1.3,
+      center: LANDING_CENTER,
+      zoom: LANDING_ZOOM,
       pitch: 0,
       bearing: 0,
-      duration: 1400,
+      duration: 1800,
     })
+
+    const spin = () => {
+      if (!mapRef.current || experienceStartedRef.current) {
+        landingSpinFrameRef.current = null
+        return
+      }
+
+      mapRef.current.rotateTo(mapRef.current.getBearing() + 0.03, {
+        duration: 0,
+      })
+      landingSpinFrameRef.current = window.requestAnimationFrame(spin)
+    }
+
+    landingSpinFrameRef.current = window.requestAnimationFrame(spin)
   }, [experienceStarted])
 
   useEffect(() => {
@@ -609,7 +686,7 @@ function MapView({
   }, [searchCenter, searchRadiusMeters, poiFeatures, listings, activeListing])
 
   useEffect(() => {
-    if (!focusTarget || !mapRef.current) {
+    if (!experienceStarted || !focusTarget || !mapRef.current) {
       return
     }
 
@@ -618,13 +695,15 @@ function MapView({
       zoom: focusTarget.zoom,
       pitch: focusTarget.pitch,
       bearing: focusTarget.bearing,
-      duration: 1400,
+      duration: experienceStarted ? 4200 : 1400,
+      curve: 1.28,
+      speed: 0.42,
       essential: true,
     })
-  }, [focusTarget])
+  }, [experienceStarted, focusTarget])
 
   useEffect(() => {
-    if (!activeListing || !mapRef.current?.isStyleLoaded()) {
+    if (!experienceStarted || !activeListing || !mapRef.current?.isStyleLoaded()) {
       return
     }
 
@@ -632,15 +711,13 @@ function MapView({
     popupRef.current = new mapboxgl.Popup({ offset: 18 })
       .setLngLat(activeListing.geometry.coordinates)
       .setHTML(
-        getPopupMarkup(escapeHtml(activeListing.properties.title), [
-          `${escapeHtml(activeListing.properties.neighborhood)}`,
-          `$${activeListing.properties.monthlyRent.toLocaleString()}/mo`,
-          `${activeListing.properties.beds} bd / ${activeListing.properties.baths} ba / ${activeListing.properties.sqft} sq ft`,
-          `${activeListing.properties.rankLabel}`,
-        ]),
+        getPopupMarkup(
+          escapeHtml(activeListing.properties.title),
+          getListingPopupLines(activeListing.properties),
+        ),
       )
       .addTo(mapRef.current)
-  }, [activeListing])
+  }, [activeListing, experienceStarted])
 
   const resetToSearchArea = () => {
     if (!mapRef.current) {
@@ -743,8 +820,8 @@ function MapView({
           </header>
 
           <p className="gesture-hint">
-            Tip: the blue search ring is the active search area, ochre markers are
-            sample rentals, and colored dots are live neighborhood services.
+            Tip: blue ring = search area, ochre labels = rental listings, colored labels =
+            nearby amenities.
           </p>
         </>
       ) : null}
@@ -760,10 +837,9 @@ function MapView({
           </div>
           <div className="landing-content">
             <p className="label">Neighborhood Search</p>
-            <h1>Find the block that fits you best.</h1>
+            <h1>Nook</h1>
             <p className="landing-copy">
-              Start from the globe, choose a place, then tune price and amenity
-              priorities to see which rentals rise to the top.
+              Find the block that fits you best
             </p>
             <form className="landing-search" onSubmit={onLandingSubmit}>
               <input
