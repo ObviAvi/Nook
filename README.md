@@ -1,50 +1,66 @@
-# Neighborhood Fit Explorer Prototype
+# Nook Agentic Explorer
 
-Prototype React + Mapbox app for comparing fake rental listings against real POI data from OpenStreetMap via Overpass.
+Agentic apartment discovery prototype with an integrated JS backend and React + Mapbox frontend.
 
-## What It Does
+## Architecture
 
-- Shows a 3D Mapbox scene with live lighting controls.
-- Uses sample regions as the search-area input for now.
-- Loads real POIs from OSM for selected services like groceries, parks, gyms, and cafes.
-- Overlays hardcoded GeoJSON listings on the map.
-- Scores and ranks listings by how many selected POIs fall within a nearby matching radius.
+- Frontend (`src`): prompt input, ranked listing panel, and Mapbox visualization.
+- Backend (`server`): LLM structured extraction, listing fetch, Overpass amenity aggregation, WLC ranking, and GeoJSON response generation.
+- Data contract: backend returns ranked apartments as a GeoJSON `FeatureCollection` with root feature IDs and normalized ranking scores in `properties`.
 
-## Quick Start
+## Implemented Pipeline
 
-1. Install dependencies:
+1. Preference extraction with LLM structured output (`/api/search` parses prompt into strict JSON constraints + category weights).
+2. Listing ingestion is mock-first for high velocity, with optional RentCast mode and automatic fallback to curated mock listings.
+3. Overpass amenity fetch by weighted categories using dynamic queries with `out center tags`.
+4. Weighted linear combination ranking:
+	- Exponential distance decay: $e^{-\beta d}$
+	- Budget-based linear price factor
+	- Min-max normalized final score in $[0,1]$
+5. Frontend map sync using `setData()` and `setFeatureState` for active/hover interactions.
 
-```bash
-npm install
-```
+## Environment Variables
 
-2. Create `.env.local` in the project root:
+Copy `.env.example` to `.env.local` in the project root and fill values:
 
 ```env
 VITE_MAPBOX_TOKEN=pk.your_mapbox_public_token_here
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-3-flash-preview
+RENTCAST_API_KEY=your-rentcast-key
+API_PORT=8787
 ```
 
-3. Start the dev server:
+Notes:
+
+- `GEMINI_API_KEY` is required for prompt extraction.
+- `RENTCAST_API_KEY` is optional; if absent, the backend uses mock listings.
+- The sidebar includes a listing source selector: `Mock Data` (default) or `RentCast` (opt-in).
+- Backend loads environment variables from `.env` and `.env.local` automatically at server startup.
+
+## Quick Start
 
 ```bash
+npm install
+//npm install @rolldown/binding-win32-x64-msvc@1.0.0-rc.15 --save-dev
 npm run dev
 ```
 
-## Current Prototype Scope
+`npm run dev` starts both:
 
-- Region input is implemented as sample presets, not free-text geocoding yet.
-- Listings are hardcoded GeoJSON features.
-- POIs are fetched live from `overpass-api.de` at runtime.
-- Listing ranking is currently a simple count of selected POIs within 1.2 km of each listing.
+- Vite frontend
+- Node API server (`server/index.js`)
 
-## Main Files
+## Key Files
 
-- `src/App.jsx`: search state, ranking, and Overpass orchestration.
-- `src/components/MapView.jsx`: 3D Mapbox scene and live overlay layers.
-- `src/components/Sidebar.jsx`: region picker, filters, and ranked listing UI.
-- `src/data/fakeListings.js`: hardcoded sample listings.
-- `src/data/sampleRegions.js`: sample regions used as search areas.
-- `src/lib/overpass.js`: Overpass query builder and OSM normalization.
+- `server/index.js`: API entrypoint (`/api/search`, `/api/health`)
+- `server/services/llm.js`: strict JSON extraction with Gemini (`@google/genai`)
+- `server/services/listings.js`: RentCast + mock listing adapter with SHA-256 IDs
+- `server/services/overpass.js`: amenity aggregation by category
+- `server/services/ranking.js`: WLC scoring and GeoJSON output
+- `src/App.jsx`: frontend orchestration and state
+- `src/components/MapView.jsx`: map rendering and feature-state interactivity
+- `src/components/Sidebar.jsx`: prompt and ranking UI
 
 ## Verify
 

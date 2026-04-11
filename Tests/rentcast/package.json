@@ -1,0 +1,27 @@
+{
+  "name": "rentcast-api-smoketest",
+  "version": "1.0.0",
+  "description": "Smoke test service for RentCast API to verify service availability and rental data functionality",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/smoketest.js",
+    "test:verbose": "node test/smoketest.js --verbose",
+    "start": "node index.js",
+    "test:quick": "node test/smoketest.js --quick"
+  },
+  "keywords": [
+    "rentcast",
+    "rental",
+    "property",
+    "real-estate",
+    "smoketest",
+    "api-testing"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.5",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {}
+}

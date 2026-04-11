@@ -1,0 +1,25 @@
+{
+  "name": "overpass-api-smoketest",
+  "version": "1.0.0",
+  "description": "Smoke test service for Overpass API to verify service availability and basic functionality",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/smoketest.js",
+    "test:verbose": "node test/smoketest.js --verbose",
+    "start": "node index.js",
+    "test:quick": "node test/smoketest.js --quick"
+  },
+  "keywords": [
+    "overpass",
+    "openstreetmap",
+    "osm",
+    "smoketest",
+    "api-testing"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.5"
+  },
+  "devDependencies": {}
+}
