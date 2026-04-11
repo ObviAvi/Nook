@@ -1,14 +1,66 @@
-# Neighborhood Fit Explorer Prototype
+# Nook
 
-Prototype React + Mapbox app for comparing fake rental listings against real POI data from OpenStreetMap via Overpass.
+Nook is a React + Mapbox prototype for comparing rental listings against nearby neighborhood services (POIs) from OpenStreetMap via Overpass.
 
-## What It Does
+Apartment finders focus on immediate apartment specifications, but not the surrounding environment. As college students (as well as interns, new grads, new parents), we just want minimal apartment specifications for minimal price, where we really care about the surrounding amenities and surrounding environment - what services we can easily access, either by foot or by mobile.
 
-- Shows a 3D Mapbox scene with live lighting controls.
-- Uses sample regions as the search-area input for now.
-- Loads real POIs from OSM for selected services like groceries, parks, gyms, and cafes.
-- Overlays hardcoded GeoJSON listings on the map.
-- Scores and ranks listings by how many selected POIs fall within a nearby matching radius.
+Not only this, surroundings are also very important for families as well.
+
+With the current housing crisis (rising housing prices), finding a good housing or apartment is harder than ever. that's why we built nook
+
+The app combines:
+
+- Sample regions as search presets
+- Hardcoded rental listings per region
+- Live POI fetching for service categories
+- Preference-weighted ranking of listings
+
+## Current Experience
+
+### Landing
+
+- Full-screen globe view (`globe` projection)
+- Slightly zoomed-in globe with idle spin
+- Search-like entry UI backed by sample region suggestions
+
+### Exploration
+
+- 3D neighborhood map (`mercator` projection)
+- Search radius visualization (center point + ring)
+- Listing points and active listing highlight
+- POI points and labels by service category
+- Lighting/time-of-day slider
+
+### Results Mode
+
+- Ranked listing list in the sidebar
+- Mini listing cards rendered over each listing on the map
+- Floating top map controls for:
+  - Search area reset
+  - Overview/detail zoom
+  - Rotate left/right
+  - Tilt down/up
+  - 3D cinematic view
+
+## Ranking Model (Prototype)
+
+Listings are scored using normalized user preferences:
+
+- Service-category importance weights
+- Price importance weight
+- Preferred monthly rent target
+- POI proximity/access metrics (within a matching radius)
+
+The current matching radius for listing-to-POI scoring is defined in code as:
+
+- `LISTING_MATCH_RADIUS_METERS = 1200` in `src/App.jsx`
+
+## Tech Stack
+
+- React 19
+- Vite 8
+- Mapbox GL JS
+- OpenStreetMap Overpass API
 
 ## Quick Start
 
@@ -24,31 +76,41 @@ npm install
 VITE_MAPBOX_TOKEN=pk.your_mapbox_public_token_here
 ```
 
-3. Start the dev server:
+3. Run the app:
 
 ```bash
 npm run dev
 ```
 
-## Current Prototype Scope
+4. Open the local Vite URL shown in the terminal (typically `http://localhost:5173`).
 
-- Region input is implemented as sample presets, not free-text geocoding yet.
-- Listings are hardcoded GeoJSON features.
-- POIs are fetched live from `overpass-api.de` at runtime.
-- Listing ranking is currently a simple count of selected POIs within 1.2 km of each listing.
+## Scripts
 
-## Main Files
+- `npm run dev` starts the Vite dev server
+- `npm run build` builds for production
+- `npm run preview` previews the production build locally
+- `npm run lint` runs ESLint
 
-- `src/App.jsx`: search state, ranking, and Overpass orchestration.
-- `src/components/MapView.jsx`: 3D Mapbox scene and live overlay layers.
-- `src/components/Sidebar.jsx`: region picker, filters, and ranked listing UI.
-- `src/data/fakeListings.js`: hardcoded sample listings.
-- `src/data/sampleRegions.js`: sample regions used as search areas.
-- `src/lib/overpass.js`: Overpass query builder and OSM normalization.
+## Project Structure
 
-## Verify
+- `src/App.jsx` app state orchestration, search flow, ranking integration
+- `src/components/MapView.jsx` Mapbox setup, map layers, camera controls, landing globe, listing mini-cards
+- `src/components/Sidebar.jsx` setup/results UI, preference sliders, ranked list
+- `src/data/fakeListings.js` sample rental listing dataset (GeoJSON features)
+- `src/data/sampleRegions.js` sample searchable regions and default camera settings
+- `src/data/serviceCategories.js` POI category definitions and defaults
+- `src/lib/overpass.js` Overpass query construction + OSM normalization
+- `src/lib/ranking.js` preference normalization and listing ranking logic
+- `src/lib/geo.js` distance and geometry helpers
 
-```bash
-npm run lint
-npm run build
-```
+## Data and API Notes
+
+- POIs are fetched live at runtime from Overpass.
+- Listings are currently static sample data.
+- Region search is currently matched against local sample region names, not geocoding.
+
+## Troubleshooting
+
+- If the map does not render, verify `VITE_MAPBOX_TOKEN` in `.env.local` and restart the dev server.
+- If POIs fail to load, Overpass may be rate-limited or temporarily unavailable; retry shortly.
+- If UI changes do not appear during development, hard-refresh the browser to clear stale assets.
