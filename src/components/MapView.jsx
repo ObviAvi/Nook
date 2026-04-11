@@ -385,6 +385,7 @@ function MapView({
   const popupRef = useRef(null)
   const onSelectListingRef = useRef(onSelectListing)
   const onViewUpdateRef = useRef(onViewUpdate)
+  const experienceStartedRef = useRef(experienceStarted)
   const mapDataRef = useRef({
     searchCenter,
     searchRadiusMeters,
@@ -402,6 +403,10 @@ function MapView({
   useEffect(() => {
     onViewUpdateRef.current = onViewUpdate
   }, [onViewUpdate])
+
+  useEffect(() => {
+    experienceStartedRef.current = experienceStarted
+  }, [experienceStarted])
 
   useEffect(() => {
     mapDataRef.current = {
@@ -428,15 +433,18 @@ function MapView({
 
     mapboxgl.accessToken = token
     const currentMapData = mapDataRef.current
+    const currentExperienceStarted = experienceStartedRef.current
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: mapStyle,
-      center: experienceStarted ? currentMapData.searchCenter : [8, 18],
-      zoom: experienceStarted ? getOverviewZoom(currentMapData.searchRadiusMeters) : 1.3,
-      pitch: experienceStarted ? 52 : 0,
-      bearing: experienceStarted ? -18 : 0,
-      projection: experienceStarted ? 'mercator' : 'globe',
+      center: currentExperienceStarted ? currentMapData.searchCenter : [8, 18],
+      zoom: currentExperienceStarted
+        ? getOverviewZoom(currentMapData.searchRadiusMeters)
+        : 1.3,
+      pitch: currentExperienceStarted ? 52 : 0,
+      bearing: currentExperienceStarted ? -18 : 0,
+      projection: currentExperienceStarted ? 'mercator' : 'globe',
       antialias: true,
       maxPitch: 85,
     })

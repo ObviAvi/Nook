@@ -329,6 +329,15 @@ function App() {
         onLandingSuggestionSelect={(region) => {
           setLandingQuery(region.name)
           setSelectedRegionId(region.id)
+          setActiveListingId(null)
+          setExperienceStarted(true)
+          setFocusTarget({
+            key: `region-${region.id}-${Date.now()}`,
+            center: region.center,
+            zoom: region.zoom,
+            pitch: region.pitch,
+            bearing: region.bearing,
+          })
         }}
       />
       {experienceStarted ? (
