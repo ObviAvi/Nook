@@ -15,7 +15,8 @@ const LISTINGS_ACTIVE_LAYER_ID = 'listings-active'
 const POIS_LAYER_ID = 'pois-layer'
 const POIS_LABEL_LAYER_ID = 'pois-labels'
 const LANDING_CENTER = [0, 16]
-const LANDING_ZOOM = 0.52
+const LANDING_ZOOM = 0.8
+const LANDING_SPIN_RATE = 0.06
 
 function createFeatureCollection(features) {
   return {
@@ -164,6 +165,14 @@ function getListingPopupLines(listingProperties = {}) {
   ]
 }
 
+function formatCurrency(amount) {
+  return Number(amount ?? 0).toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  })
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -228,6 +237,17 @@ function createPoiData(poiFeatures) {
       },
     })),
   )
+}
+
+function getListingMarkerMarkup(listingProperties = {}) {
+  return `
+    <article class="listing-mini-card ${listingProperties.active ? 'listing-mini-card-active' : ''}">
+      <p class="listing-mini-rank">#${listingProperties.rank ?? '?'}</p>
+      <h3>${escapeHtml(listingProperties.title ?? 'Listing')}</h3>
+      <p>${formatCurrency(listingProperties.monthlyRent)} | ${listingProperties.beds ?? '?'} bd | ${listingProperties.baths ?? '?'} ba</p>
+      <p>${escapeHtml(listingProperties.neighborhood ?? '')}</p>
+    </article>
+  `
 }
 
 function ensureMapSourcesAndLayers(map) {
@@ -418,6 +438,7 @@ function MapView({
   mapStyle,
   timeOfDayHour,
   experienceStarted,
+  sidebarMode,
   searchCenter,
   searchRadiusMeters,
   poiFeatures,
@@ -435,6 +456,7 @@ function MapView({
   const mapContainerRef = useRef(null)
   const mapRef = useRef(null)
   const popupRef = useRef(null)
+  const listingMarkersRef = useRef([])
   const onSelectListingRef = useRef(onSelectListing)
   const onViewUpdateRef = useRef(onViewUpdate)
   const experienceStartedRef = useRef(experienceStarted)
@@ -446,8 +468,10 @@ function MapView({
     listings,
     activeListing,
     timeOfDayHour,
+    sidebarMode,
   })
   const [mapError, setMapError] = useState('')
+  const [mapLoaded, setMapLoaded] = useState(false)
 
   useEffect(() => {
     onSelectListingRef.current = onSelectListing
@@ -469,6 +493,7 @@ function MapView({
       listings,
       activeListing,
       timeOfDayHour,
+      sidebarMode,
     }
   }, [
     searchCenter,
@@ -477,6 +502,7 @@ function MapView({
     listings,
     activeListing,
     timeOfDayHour,
+    sidebarMode,
   ])
 
   useEffect(() => {
@@ -503,6 +529,7 @@ function MapView({
     })
 
     mapRef.current = map
+    setMapLoaded(false)
     map.addControl(new mapboxgl.NavigationControl(), 'top-right')
     map.dragRotate.enable()
     map.touchZoomRotate.enableRotation()
@@ -519,6 +546,7 @@ function MapView({
     })
 
     map.on('load', () => {
+      setMapLoaded(true)
       const latestMapData = mapDataRef.current
 
       map.setFog({
@@ -552,16 +580,7 @@ function MapView({
           onSelectListingRef.current(listingId)
         }
 
-        popupRef.current?.remove()
-        popupRef.current = new mapboxgl.Popup({ offset: 18 })
-          .setLngLat(event.lngLat)
-          .setHTML(
-            getPopupMarkup(
-              escapeHtml(listingFeature.properties?.title ?? 'Listing'),
-              getListingPopupLines(listingFeature.properties),
-            ),
-          )
-          .addTo(map)
+        // Listing details are shown in persistent mini-cards; selection only.
       }
 
       map.on('click', LISTINGS_LAYER_ID, openListingPopup)
@@ -610,11 +629,12 @@ function MapView({
       popupRef.current = null
       map.remove()
       mapRef.current = null
+      setMapLoaded(false)
     }
   }, [token, mapStyle])
 
   useEffect(() => {
-    if (!mapRef.current?.isStyleLoaded()) {
+    if (!mapRef.current || !mapLoaded) {
       return
     }
 
@@ -653,14 +673,14 @@ function MapView({
         return
       }
 
-      mapRef.current.rotateTo(mapRef.current.getBearing() + 0.03, {
+      mapRef.current.rotateTo(mapRef.current.getBearing() + LANDING_SPIN_RATE, {
         duration: 0,
       })
       landingSpinFrameRef.current = window.requestAnimationFrame(spin)
     }
 
     landingSpinFrameRef.current = window.requestAnimationFrame(spin)
-  }, [experienceStarted])
+  }, [experienceStarted, mapLoaded])
 
   useEffect(() => {
     if (!mapRef.current) {
@@ -671,7 +691,7 @@ function MapView({
   }, [timeOfDayHour])
 
   useEffect(() => {
-    if (!mapRef.current?.isStyleLoaded()) {
+    if (!mapRef.current || !mapLoaded) {
       return
     }
 
@@ -683,7 +703,100 @@ function MapView({
       listings,
       activeListing,
     })
-  }, [searchCenter, searchRadiusMeters, poiFeatures, listings, activeListing])
+  }, [searchCenter, searchRadiusMeters, poiFeatures, listings, activeListing, mapLoaded])
+
+  useEffect(() => {
+    for (const markerEntry of listingMarkersRef.current) {
+      markerEntry.marker.remove()
+    }
+    listingMarkersRef.current = []
+
+    if (
+      !mapRef.current ||
+      !mapLoaded ||
+      !experienceStarted ||
+      sidebarMode !== 'results'
+    ) {
+      return
+    }
+
+    listingMarkersRef.current = listings.map((listing) => {
+      const markerElement = document.createElement('button')
+      markerElement.type = 'button'
+      markerElement.className = 'listing-mini-card-wrap'
+      markerElement.setAttribute('aria-label', `View ${listing.properties.title}`)
+      markerElement.innerHTML = getListingMarkerMarkup({
+        ...listing.properties,
+        active: listing.properties.id === activeListing?.properties.id,
+      })
+      markerElement.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onSelectListingRef.current(listing.properties.id)
+      })
+
+      const marker = new mapboxgl.Marker({
+        element: markerElement,
+        anchor: 'bottom',
+        offset: [0, -12],
+      })
+        .setLngLat(listing.geometry.coordinates)
+        .addTo(mapRef.current)
+
+      return {
+        id: listing.properties.id,
+        marker,
+        element: markerElement,
+      }
+    })
+
+    if (mapRef.current.getLayer(LISTINGS_LABEL_LAYER_ID)) {
+      mapRef.current.setLayoutProperty(LISTINGS_LABEL_LAYER_ID, 'visibility', 'none')
+    }
+
+    return () => {
+      for (const markerEntry of listingMarkersRef.current) {
+        markerEntry.marker.remove()
+      }
+      listingMarkersRef.current = []
+    }
+  }, [experienceStarted, listings, sidebarMode, mapLoaded])
+
+  useEffect(() => {
+    if (!mapRef.current || !mapLoaded) {
+      return
+    }
+
+    if (sidebarMode === 'results') {
+      return
+    }
+
+    if (mapRef.current.getLayer(LISTINGS_LABEL_LAYER_ID)) {
+      mapRef.current.setLayoutProperty(LISTINGS_LABEL_LAYER_ID, 'visibility', 'visible')
+    }
+
+    for (const markerEntry of listingMarkersRef.current) {
+      markerEntry.marker.remove()
+    }
+    listingMarkersRef.current = []
+  }, [mapLoaded, sidebarMode])
+
+  useEffect(() => {
+    const activeListingId = activeListing?.properties.id
+
+    for (const markerEntry of listingMarkersRef.current) {
+      const article = markerEntry.element.querySelector('.listing-mini-card')
+
+      if (!article) {
+        continue
+      }
+
+      article.classList.toggle(
+        'listing-mini-card-active',
+        markerEntry.id === activeListingId,
+      )
+    }
+  }, [activeListing])
 
   useEffect(() => {
     if (!experienceStarted || !focusTarget || !mapRef.current) {
@@ -701,23 +814,6 @@ function MapView({
       essential: true,
     })
   }, [experienceStarted, focusTarget])
-
-  useEffect(() => {
-    if (!experienceStarted || !activeListing || !mapRef.current?.isStyleLoaded()) {
-      return
-    }
-
-    popupRef.current?.remove()
-    popupRef.current = new mapboxgl.Popup({ offset: 18 })
-      .setLngLat(activeListing.geometry.coordinates)
-      .setHTML(
-        getPopupMarkup(
-          escapeHtml(activeListing.properties.title),
-          getListingPopupLines(activeListing.properties),
-        ),
-      )
-      .addTo(mapRef.current)
-  }, [activeListing, experienceStarted])
 
   const resetToSearchArea = () => {
     if (!mapRef.current) {
@@ -791,32 +887,6 @@ function MapView({
               <p className="label">Nook</p>
               <h1>Neighborhood Fit Explorer</h1>
             </div>
-            <div className="map-actions">
-              <button type="button" onClick={resetToSearchArea}>
-                Search Area
-              </button>
-              <button type="button" onClick={() => applyZoomPreset(14)}>
-                Overview
-              </button>
-              <button type="button" onClick={() => applyZoomPreset(16.25)}>
-                Detail
-              </button>
-              <button type="button" onClick={() => adjustPitch(-8)}>
-                Tilt -
-              </button>
-              <button type="button" onClick={() => adjustPitch(8)}>
-                Tilt +
-              </button>
-              <button type="button" onClick={() => adjustBearing(-15)}>
-                Rotate -
-              </button>
-              <button type="button" onClick={() => adjustBearing(15)}>
-                Rotate +
-              </button>
-              <button type="button" onClick={cinematicView}>
-                3D View
-              </button>
-            </div>
           </header>
 
           <p className="gesture-hint">
@@ -829,6 +899,35 @@ function MapView({
       {mapError ? <p className="map-error glass-card">{mapError}</p> : null}
 
       <div ref={mapContainerRef} className={`map-canvas ${experienceStarted ? '' : 'map-canvas-landing'}`} />
+
+      {experienceStarted ? (
+        <nav className="map-top-nav glass-card" aria-label="Map controls">
+          <button type="button" onClick={resetToSearchArea}>
+            Search Area
+          </button>
+          <button type="button" onClick={() => applyZoomPreset(14)}>
+            Overview
+          </button>
+          <button type="button" onClick={() => applyZoomPreset(16.25)}>
+            Detail
+          </button>
+          <button type="button" onClick={() => adjustBearing(-15)}>
+            Rotate -
+          </button>
+          <button type="button" onClick={() => adjustBearing(15)}>
+            Rotate +
+          </button>
+          <button type="button" onClick={() => adjustPitch(-8)}>
+            Tilt -
+          </button>
+          <button type="button" onClick={() => adjustPitch(8)}>
+            Tilt +
+          </button>
+          <button type="button" onClick={cinematicView}>
+            3D View
+          </button>
+        </nav>
+      ) : null}
 
       {!experienceStarted ? (
         <div className="landing-hero">

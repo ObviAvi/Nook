@@ -35,7 +35,6 @@ function App() {
   const [landingQuery, setLandingQuery] = useState('')
   const [sidebarMode, setSidebarMode] = useState('setup')
   const [showPreferencesDrawer, setShowPreferencesDrawer] = useState(false)
-  const [mapStyle, setMapStyle] = useState('mapbox://styles/mapbox/standard')
   const [timeOfDayHour, setTimeOfDayHour] = useState(15.25)
   const [selectedRegionId, setSelectedRegionId] = useState(DEFAULT_REGION.id)
   const [searchCenter, setSearchCenter] = useState(DEFAULT_REGION.center)
@@ -291,9 +290,10 @@ function App() {
     <main className={`app-shell ${experienceStarted ? 'app-shell-active' : 'app-shell-landing'}`}>
       <MapView
         token={token}
-        mapStyle={mapStyle}
+        mapStyle="mapbox://styles/mapbox/standard"
         timeOfDayHour={timeOfDayHour}
         experienceStarted={experienceStarted}
+        sidebarMode={sidebarMode}
         searchCenter={searchCenter}
         searchRadiusMeters={searchRadiusMeters}
         poiFeatures={poiFeatures}
