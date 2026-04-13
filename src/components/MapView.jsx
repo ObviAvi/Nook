@@ -15,7 +15,7 @@ const LISTINGS_ACTIVE_LAYER_ID = 'listings-active'
 const POIS_LAYER_ID = 'pois-layer'
 const POIS_LABEL_LAYER_ID = 'pois-labels'
 const LANDING_CENTER = [0, 16]
-const LANDING_ZOOM = 0.8
+const LANDING_ZOOM = 2.5
 const LANDING_SPIN_RATE = 0.06
 
 function createFeatureCollection(features) {
