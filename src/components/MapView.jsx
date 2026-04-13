@@ -923,9 +923,6 @@ function MapView({
           <button type="button" onClick={() => adjustPitch(8)}>
             Tilt +
           </button>
-          <button type="button" onClick={cinematicView}>
-            3D View
-          </button>
         </nav>
       ) : null}
 
