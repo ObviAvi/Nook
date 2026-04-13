@@ -2,6 +2,8 @@
 
 Nook is a React + Mapbox prototype for comparing rental listings against nearby neighborhood services (POIs) from OpenStreetMap via Overpass.
 
+More information on devpost: https://devpost.com/software/nook-d0fl7g?ref_content=user-portfolio&ref_feature=in_progress
+
 Apartment finders focus on immediate apartment specifications, but not the surrounding environment. As college students (as well as interns, new grads, new parents), we just want minimal apartment specifications for minimal price, where we really care about the surrounding amenities and surrounding environment - what services we can easily access, either by foot or by mobile.
 
 Not only this, surroundings are also very important for families as well.
