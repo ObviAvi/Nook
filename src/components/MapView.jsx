@@ -266,7 +266,7 @@ function ensureMapSourcesAndLayers(map) {
       filter: ['==', '$type', 'Polygon'],
       paint: {
         'fill-color': '#6ec5ff',
-        'fill-opacity': 0.1,
+        'fill-opacity': 0.16,
       },
     })
   }
@@ -278,8 +278,9 @@ function ensureMapSourcesAndLayers(map) {
       source: SEARCH_AREA_SOURCE_ID,
       filter: ['==', '$type', 'Polygon'],
       paint: {
-        'line-color': '#9fddff',
-        'line-width': 2,
+        'line-color': '#d8f2ff',
+        'line-width': 4.5,
+        'line-opacity': 0.95,
         'line-dasharray': [2, 2],
       },
     })

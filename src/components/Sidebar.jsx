@@ -71,6 +71,7 @@ function Sidebar({
       <section>
         <h2>Set Your Priorities</h2>
         <label className="field-stack">
+          <span>Sample area</span>
           <select
             className="sidebar-select"
             value={selectedRegionId}
