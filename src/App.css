@@ -325,6 +325,35 @@
   color: color-mix(in srgb, var(--ink) 78%, white 22%);
 }
 
+.amenity-loading {
+  color: color-mix(in srgb, var(--ink) 68%, var(--accent-soft) 32%);
+}
+
+.amenity-status {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.loading-dots {
+  display: inline-block;
+  width: 1.4em;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: loading-dots 1.1s steps(4, end) infinite;
+}
+
+@keyframes loading-dots {
+  from {
+    width: 0;
+  }
+
+  to {
+    width: 1.4em;
+  }
+}
+
 .radius-card,
 .time-slider-wrap {
   border: 1px solid var(--line);

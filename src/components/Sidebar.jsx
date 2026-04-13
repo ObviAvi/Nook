@@ -20,6 +20,7 @@ function Sidebar({
   showPreferencesDrawer,
   onTogglePreferencesDrawer,
   onSubmitSearch,
+  isAmenityLoading,
   searchError,
   listings,
   activeListing,
@@ -68,10 +69,8 @@ function Sidebar({
   const renderPreferenceControls = () => (
     <>
       <section>
-        <p className="label">Search Setup</p>
         <h2>Set Your Priorities</h2>
         <label className="field-stack">
-          <span>Sample area</span>
           <select
             className="sidebar-select"
             value={selectedRegionId}
@@ -84,7 +83,22 @@ function Sidebar({
             ))}
           </select>
         </label>
-        <p className="section-copy">{selectedRegion.description}</p>
+        <p
+          className={`label amenity-status ${isAmenityLoading ? 'amenity-loading' : ''}`}
+          role="status"
+          aria-live="polite"
+        >
+          {isAmenityLoading ? (
+            <>
+              Loading Amenities
+              <span className="loading-dots" aria-hidden="true">
+                ...
+              </span>
+            </>
+          ) : (
+            'Amenities Synced For This Area'
+          )}
+        </p>
 
         <div className="radius-card">
           <div className="time-slider-head">

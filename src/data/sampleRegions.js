@@ -7,7 +7,6 @@ export const sampleRegions = [
     pitch: 54,
     bearing: -18,
     radiusMeters: 1600,
-    description: 'College-town baseline with walkable parks, groceries, and rentals.',
   },
   {
     id: 'downtown-indianapolis',
@@ -17,7 +16,6 @@ export const sampleRegions = [
     pitch: 56,
     bearing: -14,
     radiusMeters: 1800,
-    description: 'Dense downtown sample with mixed-use blocks and a broader amenity spread.',
   },
   {
     id: 'logan-square',
@@ -27,6 +25,5 @@ export const sampleRegions = [
     pitch: 58,
     bearing: -22,
     radiusMeters: 1700,
-    description: 'Neighborhood-scale example with layered parks, cafes, and everyday services.',
   },
 ]

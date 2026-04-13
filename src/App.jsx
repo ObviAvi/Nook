@@ -41,6 +41,7 @@ function App() {
   const [searchRadiusMeters, setSearchRadiusMeters] = useState(
     DEFAULT_REGION.radiusMeters,
   )
+  const [radiusRefreshTrigger, setRadiusRefreshTrigger] = useState(0)
   const [selectedCategoryIds] = useState(defaultServiceCategoryIds)
   const [categoryImportance, setCategoryImportance] = useState(() =>
     buildDefaultCategoryImportance(serviceCategories),
@@ -52,6 +53,8 @@ function App() {
     getDefaultPreferredMonthlyRent(fakeListings.features),
   )
   const [poiFeatures, setPoiFeatures] = useState([])
+  const [isAmenityLoading, setIsAmenityLoading] = useState(false)
+  const [isAmenityRefreshPending, setIsAmenityRefreshPending] = useState(false)
   const [searchError, setSearchError] = useState('')
   const [activeListingId, setActiveListingId] = useState(null)
   const [focusTarget, setFocusTarget] = useState({
@@ -110,10 +113,12 @@ function App() {
       if (!categoryIds.length) {
         setPoiFeatures([])
         setSearchError('Select at least one service category before searching.')
+        setIsAmenityLoading(false)
         return
       }
 
       setSearchError('')
+      setIsAmenityLoading(true)
 
       try {
         const nextPois = await fetchPoisForArea({
@@ -139,7 +144,9 @@ function App() {
             : 'Unable to load POIs from Overpass right now.',
         )
       } finally {
-        // No loading state is surfaced in the current setup/results UI.
+        if (latestSearchIdRef.current === searchId) {
+          setIsAmenityLoading(false)
+        }
       }
     },
     [],
@@ -155,6 +162,7 @@ function App() {
 
     setSearchCenter(nextCenter)
     setSearchRadiusMeters(nextRadius)
+    setIsAmenityRefreshPending(false)
     setSidebarMode('setup')
     setShowPreferencesDrawer(false)
     setFocusTarget({
@@ -196,6 +204,33 @@ function App() {
       bearing: -20,
     })
   }, [activeListingId, rankedListings])
+
+  useEffect(() => {
+    if (!experienceStarted || radiusRefreshTrigger === 0) {
+      return
+    }
+
+    setIsAmenityRefreshPending(true)
+
+    const timeoutId = window.setTimeout(() => {
+      setIsAmenityRefreshPending(false)
+      void performPoiSearch({
+        center: searchCenter,
+        radiusMeters: searchRadiusMeters,
+        categoryIds: selectedCategoryIdsRef.current,
+      })
+    }, 3000)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [
+    experienceStarted,
+    performPoiSearch,
+    radiusRefreshTrigger,
+    searchCenter,
+    searchRadiusMeters,
+  ])
 
   const handleSelectListing = (listingId) => {
     setActiveListingId(listingId)
@@ -242,6 +277,11 @@ function App() {
       pitch: selectedRegion.pitch,
       bearing: selectedRegion.bearing,
     })
+  }
+
+  const handleSearchRadiusChange = (nextRadiusMeters) => {
+    setSearchRadiusMeters(nextRadiusMeters)
+    setRadiusRefreshTrigger((currentValue) => currentValue + 1)
   }
 
   const handleLandingSubmit = (event) => {
@@ -319,7 +359,7 @@ function App() {
           onRegionChange={handleRegionChange}
           selectedRegion={selectedRegion}
           searchRadiusMeters={searchRadiusMeters}
-          onSearchRadiusChange={setSearchRadiusMeters}
+          onSearchRadiusChange={handleSearchRadiusChange}
           serviceCategories={serviceCategories}
           categoryImportance={categoryImportance}
           onCategoryImportanceChange={(categoryId, value) => {
@@ -340,6 +380,7 @@ function App() {
             setShowPreferencesDrawer((currentValue) => !currentValue)
           }
           onSubmitSearch={handleSearchSubmit}
+          isAmenityLoading={isAmenityLoading || isAmenityRefreshPending}
           searchError={searchError}
           listings={rankedListings}
           activeListing={activeListing}
