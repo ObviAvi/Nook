@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="src/assets/Nook.png" alt="Nook" height="300" />
+  <img src="src/assets/MapView.png" alt="Nook map view" height="300" />
+</p>
+
 # Nook
 
 Nook is a React + Mapbox prototype for comparing rental listings against nearby neighborhood services (POIs) from OpenStreetMap via Overpass.
