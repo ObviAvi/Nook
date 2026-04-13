@@ -1,6 +1,6 @@
 <p align="center">
-  <img src="src/assets/Nook.png" alt="Nook" height="300" />
-  <img src="src/assets/MapView.png" alt="Nook map view" height="300" />
+  <img src="src/assets/Nook.png" alt="Nook" width="500" />
+  <img src="src/assets/MapView.png" alt="Nook map view" width="500" />
 </p>
 
 # Nook
